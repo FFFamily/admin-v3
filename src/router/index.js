@@ -55,6 +55,13 @@ export const constantRoutes = [
         meta: { title: '角色详情', activeMenu: '/admin/role' }
       },
       {
+        path: 'role/:id/users',
+        name: 'AdminRoleUsers',
+        component: () => import('@/views/admin/role/users.vue'),
+        hidden: true,
+        meta: { title: '分配人员', activeMenu: '/admin/role' }
+      },
+      {
         path: 'permission',
         name: 'AdminPermission',
         component: () => import('@/views/admin/permission/index.vue'),

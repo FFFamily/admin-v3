@@ -1,74 +1,97 @@
 <template>
   <div class="admin-role-page">
-    <el-card>
-      <el-form :inline="true" :model="query" class="query-form" @submit.prevent>
-        <el-form-item label="关键字">
-          <el-input
-            v-model="query.keyword"
-            placeholder="name / code"
-            clearable
-            style="width: 240px"
-            @keyup.enter="handleSearch"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
-          <el-button v-permission="'role:create'" type="success" style="margin-left: 10px" @click="handleAdd">新增角色</el-button>
+    <el-form :inline="true" :model="query" class="query-form" @submit.prevent>
+      <el-form-item label="关键字">
+        <el-input
+          v-model="query.keyword"
+          placeholder="name / code"
+          clearable
+          style="width: 240px"
+          @keyup.enter="handleSearch"
+        />
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" :loading="loading" @click="handleSearch">搜索</el-button>
+        <el-button @click="handleReset">重置</el-button>
+        <el-button v-permission="'role:create'" type="success" style="margin-left: 10px" @click="handleAdd">新增角色</el-button>
+        <el-button
+          v-permission="'role:delete'"
+          type="danger"
+          :disabled="!selectedIds.length"
+          style="margin-left: 10px"
+          @click="handleBatchDelete"
+        >
+          批量删除
+        </el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-table
+      v-loading="loading"
+      :data="list"
+      border
+      style="width: 100%; margin-top: 10px"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" width="45" :selectable="isSelectableRow" />
+      <el-table-column prop="name" label="角色名" width="180" />
+      <el-table-column prop="code" label="编码" width="180" />
+      <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip />
+
+      <el-table-column label="操作" fixed="right" width="340">
+        <template #default="{ row }">
+          <el-button
+            v-permission="'role:update'"
+            link
+            type="primary"
+            :disabled="isSuperAdminRole(row)"
+            @click="handleEdit(row)"
+          >
+            编辑
+          </el-button>
+          <el-button
+            v-permission="'role:update'"
+            link
+            type="primary"
+            :disabled="isSuperAdminRole(row)"
+            @click="goAssignUsers(row)"
+          >
+            分配人员
+          </el-button>
+          <el-button
+            v-permission="'role:bind_permissions'"
+            link
+            type="primary"
+            :disabled="isSuperAdminRole(row)"
+            @click="openPermDialog(row)"
+          >
+            授权
+          </el-button>
           <el-button
             v-permission="'role:delete'"
+            link
             type="danger"
-            :disabled="!selectedIds.length"
-            style="margin-left: 10px"
-            @click="handleBatchDelete"
+            :disabled="isSuperAdminRole(row)"
+            @click="handleDelete(row)"
           >
-            批量删除
+            删除
           </el-button>
-        </el-form-item>
-      </el-form>
+        </template>
+      </el-table-column>
+    </el-table>
 
-      <el-table
-        v-loading="loading"
-        :data="list"
-        border
-        style="width: 100%; margin-top: 10px"
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="45" />
-        <el-table-column prop="name" label="角色名" width="180" />
-        <el-table-column prop="code" label="编码" width="180" />
-        <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip />
-
-        <el-table-column label="操作" fixed="right" width="260">
-          <template #default="{ row }">
-            <el-button v-permission="'role:update'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'role:bind_permissions'" link type="primary" @click="openPermDialog(row)">授权</el-button>
-            <el-button
-              v-permission="'role:delete'"
-              link
-              type="danger"
-              :disabled="isAdminRole(row)"
-              @click="handleDelete(row)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pager">
-        <el-pagination
-          background
-          layout="total, sizes, prev, pager, next, jumper"
-          :total="total"
-          :page-sizes="[10, 20, 50, 100]"
-          v-model:current-page="query.current"
-          v-model:page-size="query.size"
-          @size-change="fetchList"
-          @current-change="fetchList"
-        />
-      </div>
-    </el-card>
+    <div class="pager">
+      <el-pagination
+        background
+        layout="total, sizes, prev, pager, next, jumper"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        v-model:current-page="query.current"
+        v-model:page-size="query.size"
+        @size-change="fetchList"
+        @current-change="fetchList"
+      />
+    </div>
 
     <!-- 新增/编辑 -->
     <el-dialog :title="dialogTitle" v-model="dialogVisible" width="560px" @closed="onDialogClosed">
@@ -77,7 +100,7 @@
           <el-input v-model="form.name" placeholder="请输入角色名" />
         </el-form-item>
         <el-form-item label="编码" prop="code">
-          <el-input v-model="form.code" placeholder="如：ADMIN" :disabled="isEdit && isAdminRole(form)" />
+          <el-input v-model="form.code" placeholder="如：ADMIN" :disabled="isEdit && isSuperAdminRole(form)" />
         </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入备注" />
@@ -175,9 +198,13 @@ export default {
     getEmptyForm() {
       return { id: "", name: "", code: "", remark: "" }
     },
-    isAdminRole(role) {
+    isSuperAdminRole(role) {
       const code = role?.code || ""
-      return String(code).toUpperCase() === "ADMIN"
+      return String(code).toUpperCase() === "SUPER_ADMIN"
+    },
+    isSelectableRow(row) {
+      // SUPER_ADMIN 角色不允许被批量删除（禁用勾选）
+      return !this.isSuperAdminRole(row)
     },
     async fetchList() {
       this.loading = true
@@ -215,7 +242,19 @@ export default {
       this.form = this.getEmptyForm()
       this.dialogVisible = true
     },
+    goAssignUsers(row) {
+      if (!row?.id) return
+      if (this.isSuperAdminRole(row)) {
+        this.$message.warning("SUPER_ADMIN 角色不可分配人员")
+        return
+      }
+      this.$router.push({ name: "AdminRoleUsers", params: { id: row.id } })
+    },
     handleEdit(row) {
+      if (this.isSuperAdminRole(row)) {
+        this.$message.warning("SUPER_ADMIN 角色不可编辑")
+        return
+      }
       this.isEdit = true
       this.dialogTitle = "编辑角色"
       this.form = { ...this.getEmptyForm(), ...row }
@@ -226,6 +265,10 @@ export default {
       if (formRef?.clearValidate) formRef.clearValidate()
     },
     handleSave() {
+      if (this.isEdit && this.isSuperAdminRole(this.form)) {
+        this.$message.warning("SUPER_ADMIN 角色不可编辑")
+        return
+      }
       const formRef = this.$refs.formRef
       if (!formRef) return
       formRef.validate(async valid => {
@@ -247,8 +290,8 @@ export default {
       })
     },
     handleDelete(row) {
-      if (this.isAdminRole(row)) {
-        this.$message.warning("ADMIN 角色不可删除")
+      if (this.isSuperAdminRole(row)) {
+        this.$message.warning("SUPER_ADMIN 角色不可删除")
         return
       }
       this.$confirm("确认删除该角色吗？", "提示", { type: "warning" })
@@ -261,6 +304,14 @@ export default {
     },
     handleBatchDelete() {
       if (!this.selectedIds.length) return
+      // UI 已禁用勾选 SUPER_ADMIN，但这里再兜底一次，避免绕过。
+      const protectedIds = (this.list || [])
+        .filter(r => this.selectedIds.includes(r?.id) && this.isSuperAdminRole(r))
+        .map(r => r.id)
+      if (protectedIds.length) {
+        this.$message.warning("选中项包含 SUPER_ADMIN 角色，无法删除")
+        return
+      }
       this.$confirm(`确认删除选中的 ${this.selectedIds.length} 个角色吗？`, "提示", { type: "warning" })
         .then(async () => {
           await batchDeleteAdminRoles(this.selectedIds)
@@ -271,6 +322,10 @@ export default {
         .catch(() => {})
     },
     async openPermDialog(row) {
+      if (this.isSuperAdminRole(row)) {
+        this.$message.warning("SUPER_ADMIN 角色不可授权")
+        return
+      }
       this.permDialogRole = row
       this.permDialogVisible = true
       this.permSaveLoading = false

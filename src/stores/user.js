@@ -14,6 +14,14 @@ export const useUserStore = defineStore("user", {
   }),
   actions: {
     async login({ username, password }) {
+      // If switching accounts without a full reload, clear previous user profile/perms
+      // so the router guard will re-fetch the new user's permissions.
+      this.id = ""
+      this.name = ""
+      this.avatar = ""
+      this.perms = []
+      this.permsLoaded = false
+
       const res = await loginApi({ username: (username || "").trim(), password })
       const token = res?.data
       this.token = token || ""

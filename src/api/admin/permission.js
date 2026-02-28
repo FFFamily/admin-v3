@@ -75,4 +75,3 @@ export function getPermissionsByUser(userId) {
     method: "get"
   })
 }
-

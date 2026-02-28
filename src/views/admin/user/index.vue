@@ -54,7 +54,7 @@
       style="width: 100%; margin-top: 10px"
       @selection-change="handleSelectionChange"
     >
-      <el-table-column type="selection" width="45" />
+      <el-table-column type="selection" width="45" :selectable="isSelectableRow" />
       <el-table-column prop="username" label="登录账号" width="160" />
       <el-table-column prop="nickname" label="用户昵称" width="160" />
       <el-table-column prop="phone" label="手机号" width="150" />
@@ -99,7 +99,15 @@
             停用
           </el-button>
 
-          <el-button v-permission="'user:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button
+            v-permission="'user:delete'"
+            link
+            type="danger"
+            :disabled="row.status !== 'disable'"
+            @click="handleDelete(row)"
+          >
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -434,6 +442,10 @@ export default {
     handleSelectionChange(rows) {
       this.selectedIds = (rows || []).map(r => r.id).filter(Boolean)
     },
+    isSelectableRow(row) {
+      // Dangerous op: only allow selecting disabled users for batch delete.
+      return row?.status === "disable"
+    },
     handleAdd() {
       this.isEdit = false
       this.dialogTitle = "新增用户"
@@ -488,6 +500,10 @@ export default {
       })
     },
     handleDelete(row) {
+      if (row?.status !== "disable") {
+        this.$message.warning("仅允许删除已停用的用户")
+        return
+      }
       this.$confirm("确认删除该用户吗？", "提示", { type: "warning" })
         .then(async () => {
           await deleteAdminUser(row.id)
@@ -498,6 +514,12 @@ export default {
     },
     handleBatchDelete() {
       if (!this.selectedIds.length) return
+      // UI 已禁用勾选非停用用户，这里再兜底一次，避免绕过。
+      const invalid = (this.list || []).filter(u => this.selectedIds.includes(u?.id) && u?.status !== "disable")
+      if (invalid.length) {
+        this.$message.warning("仅允许删除已停用的用户")
+        return
+      }
       this.$confirm(`确认删除选中的 ${this.selectedIds.length} 个用户吗？`, "提示", { type: "warning" })
         .then(async () => {
           await batchDeleteAdminUsers(this.selectedIds)

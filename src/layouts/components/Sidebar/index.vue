@@ -23,7 +23,9 @@ import { computed } from "vue"
 import { useRoute } from "vue-router"
 import { useAppStore } from "@/stores/app"
 import { useSettingsStore } from "@/stores/settings"
+import { useUserStore } from "@/stores/user"
 import { constantRoutes } from "@/router"
+import { filterRoutesForSidebar } from "@/utils/route-permission"
 
 import Logo from "./Logo.vue"
 import SidebarItem from "./SidebarItem.vue"
@@ -32,8 +34,12 @@ import variables from "@/styles/variables.module.scss"
 const route = useRoute()
 const appStore = useAppStore()
 const settingsStore = useSettingsStore()
+const userStore = useUserStore()
 
-const routes = computed(() => constantRoutes)
+const routes = computed(() => {
+  // If perms aren't loaded (or backend doesn't support it), keep showing all menus.
+  return filterRoutesForSidebar(constantRoutes, userStore.perms, userStore.permsLoaded)
+})
 
 const activeMenu = computed(() => {
   const { meta, path } = route
