@@ -38,11 +38,15 @@
           >
             <el-table-column type="selection" width="45" />
             <el-table-column prop="name" label="名称" min-width="180" />
+            <el-table-column prop="code" label="编码" width="180" />
             <el-table-column prop="parentId" label="父级" width="120" />
             <el-table-column prop="status" label="状态" width="110">
               <template #default="{ row }">
-                <el-tag v-if="row.status" :type="row.status === 'use' ? 'success' : 'danger'">
-                  {{ row.status === "use" ? "启用" : "禁用" }}
+                <el-tag
+                  v-if="row.status !== undefined && row.status !== null"
+                  :type="Number(row.status) === 1 ? 'success' : 'danger'"
+                >
+                  {{ Number(row.status) === 1 ? "启用" : "禁用" }}
                 </el-tag>
                 <span v-else>--</span>
               </template>
@@ -92,6 +96,9 @@
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入部门名称" />
         </el-form-item>
+        <el-form-item label="编码" prop="code">
+          <el-input v-model="form.code" placeholder="请输入部门编码（唯一）" />
+        </el-form-item>
         <el-form-item label="父级" prop="parentId">
           <el-tree-select
             v-model="form.parentId"
@@ -105,9 +112,9 @@
           />
         </el-form-item>
         <el-form-item label="状态" prop="status">
-          <el-select v-model="form.status" clearable placeholder="可选" style="width: 100%">
-            <el-option label="启用" value="use" />
-            <el-option label="禁用" value="disable" />
+          <el-select v-model="form.status" placeholder="请选择" style="width: 100%">
+            <el-option label="启用" :value="1" />
+            <el-option label="禁用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item label="备注" prop="remark">
@@ -163,7 +170,8 @@ export default {
       isEdit: false,
       form: this.getEmptyForm(),
       rules: {
-        name: [{ required: true, message: "请输入部门名称", trigger: "blur" }]
+        name: [{ required: true, message: "请输入部门名称", trigger: "blur" }],
+        code: [{ required: true, message: "请输入部门编码", trigger: "blur" }]
       }
     }
   },
@@ -172,7 +180,7 @@ export default {
   },
   methods: {
     getEmptyForm() {
-      return { id: "", name: "", parentId: "", status: "use", remark: "" }
+      return { id: "", name: "", code: "", parentId: "", status: 1, remark: "" }
     },
     async bootstrap() {
       await this.fetchTree()
@@ -241,11 +249,15 @@ export default {
         if (!valid) return
         this.saveLoading = true
         try {
+          const payload = { ...this.form }
+          // Backend/tree convention: root parentId = "0". TreeSelect cleared value might be "".
+          if (!payload.parentId) payload.parentId = "0"
+          if (payload.status === undefined || payload.status === null || payload.status === "") payload.status = 1
           if (this.isEdit) {
-            await updateDepartment({ ...this.form })
+            await updateDepartment(payload)
             this.$message.success("更新成功")
           } else {
-            await createDepartment({ ...this.form })
+            await createDepartment(payload)
             this.$message.success("创建成功")
           }
           this.dialogVisible = false

@@ -77,7 +77,7 @@
         <template #default="{ row }">
           <el-button v-permission="'user:read'" link type="primary" @click="openDetail(row)">详情</el-button>
           <el-button v-permission="'user:update'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-          <el-button v-permission="'role:bind_users'" link type="primary" @click="openRoleDialog(row)">分配角色</el-button>
+          <el-button v-permission="'user:update'" link type="primary" @click="openRoleDialog(row)">分配角色</el-button>
           <el-button v-permission="'user:reset_password'" link type="primary" @click="openResetPwdDialog(row)">重置密码</el-button>
 
           <el-button
@@ -474,7 +474,10 @@ export default {
             const res = await createAdminUser({ ...this.form })
             // Best-effort: if backend returns id, keep it for follow-up actions.
             const id = res?.data?.id || res?.data
-            if (id) this.form.id = id
+            const isLikelyId =
+              typeof id === "string" &&
+              (/^[0-9a-fA-F]{32}$/.test(id) || /^[0-9a-fA-F-]{36}$/.test(id))
+            if (isLikelyId) this.form.id = id
             this.$message.success("创建成功")
           }
           this.dialogVisible = false
