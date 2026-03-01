@@ -1,94 +1,95 @@
 <template>
   <div class="admin-department-page">
-    <el-card>
-      <el-tabs v-model="activeTab">
-        <el-tab-pane label="部门列表" name="list">
-          <el-form :inline="true" :model="query" class="query-form" @submit.prevent>
-            <el-form-item label="关键字">
-              <el-input
-                v-model="query.keyword"
-                placeholder="部门名称"
-                clearable
-                style="width: 240px"
-                @keyup.enter="handleSearch"
-              />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="loading" @click="handleSearch">搜索</el-button>
-              <el-button @click="handleReset">重置</el-button>
-              <el-button v-permission="'department:create'" type="success" style="margin-left: 10px" @click="handleAdd">新增部门</el-button>
-              <el-button
-                v-permission="'department:delete'"
-                type="danger"
-                :disabled="!selectedIds.length"
-                style="margin-left: 10px"
-                @click="handleBatchDelete"
-              >
-                批量删除
-              </el-button>
-            </el-form-item>
-          </el-form>
+    <div class="header">
+      <div class="title">部门管理</div>
+      <div class="actions">
+        <el-input
+          v-model="treeKeyword"
+          placeholder="搜索：名称 / 编码"
+          clearable
+          style="width: 240px"
+          @input="applyTreeFilter"
+          @clear="applyTreeFilter"
+        />
+        <el-button :loading="treeLoading" @click="fetchTree">刷新</el-button>
+        <el-button v-permission="'department:create'" type="success" style="margin-left: 10px" @click="handleAddRoot">
+          新增部门
+        </el-button>
+        <el-button
+          v-permission="'department:create'"
+          :disabled="!currentNode"
+          style="margin-left: 10px"
+          @click="handleAddChild(currentNode)"
+        >
+          新增子部门
+        </el-button>
+        <el-button
+          v-permission="'department:update'"
+          type="primary"
+          :disabled="!currentNode"
+          style="margin-left: 10px"
+          @click="handleEdit(currentNode)"
+        >
+          编辑
+        </el-button>
+        <el-button
+          v-permission="'department:delete'"
+          type="danger"
+          :disabled="!currentNode"
+          style="margin-left: 10px"
+          @click="handleDelete(currentNode)"
+        >
+          删除
+        </el-button>
+      </div>
+    </div>
 
-          <el-table
-            v-loading="loading"
-            :data="list"
-            border
-            style="width: 100%; margin-top: 10px"
-            @selection-change="handleSelectionChange"
-          >
-            <el-table-column type="selection" width="45" />
-            <el-table-column prop="name" label="名称" min-width="180" />
-            <el-table-column prop="code" label="编码" width="180" />
-            <el-table-column prop="parentId" label="父级" width="120" />
-            <el-table-column prop="status" label="状态" width="110">
-              <template #default="{ row }">
-                <el-tag
-                  v-if="row.status !== undefined && row.status !== null"
-                  :type="Number(row.status) === 1 ? 'success' : 'danger'"
-                >
-                  {{ Number(row.status) === 1 ? "启用" : "禁用" }}
-                </el-tag>
-                <span v-else>--</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip />
-            <el-table-column label="操作" fixed="right" width="160">
-              <template #default="{ row }">
-                <el-button v-permission="'department:update'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-                <el-button v-permission="'department:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div class="pager">
-            <el-pagination
-              background
-              layout="total, sizes, prev, pager, next, jumper"
-              :total="total"
-              :page-sizes="[10, 20, 50, 100]"
-              v-model:current-page="query.current"
-              v-model:page-size="query.size"
-              @size-change="fetchList"
-              @current-change="fetchList"
-            />
+    <el-tree
+      ref="treeRef"
+      v-loading="treeLoading"
+      :data="tree"
+      node-key="id"
+      :props="treeProps"
+      default-expand-all
+      highlight-current
+      :filter-node-method="filterTreeNode"
+      @node-click="onNodeClick"
+      class="dept-tree"
+    >
+      <template #default="{ data }">
+        <div class="tree-node">
+          <div class="node-main">
+            <span class="node-name">{{ data.name }}</span>
+            <span v-if="data.code" class="node-code">({{ data.code }})</span>
+            <el-tag
+              v-if="data.status !== undefined && data.status !== null"
+              size="small"
+              :type="Number(data.status) === 1 ? 'success' : 'info'"
+              class="node-status"
+            >
+              {{ Number(data.status) === 1 ? "启用" : "禁用" }}
+            </el-tag>
           </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="部门树" name="tree">
-          <div style="margin-bottom: 10px">
-            <el-button :loading="treeLoading" @click="fetchTree">刷新</el-button>
+          <div class="node-actions">
+            <el-button v-permission="'department:create'" link type="success" @click.stop="handleAddChild(data)">
+              新增
+            </el-button>
+            <el-button v-permission="'department:update'" link type="primary" @click.stop="handleEdit(data)">
+              编辑
+            </el-button>
+            <el-button
+              v-permission="'department:delete'"
+              link
+              type="danger"
+              :disabled="data.children && data.children.length"
+              @click.stop="handleDelete(data)"
+            >
+              删除
+            </el-button>
           </div>
-          <el-tree
-            v-loading="treeLoading"
-            :data="tree"
-            node-key="id"
-            :props="treeProps"
-            default-expand-all
-            highlight-current
-          />
-        </el-tab-pane>
-      </el-tabs>
-    </el-card>
+        </div>
+      </template>
+    </el-tree>
 
     <!-- 新增/编辑 -->
     <el-dialog :title="dialogTitle" v-model="dialogVisible" width="620px" @opened="onDialogOpened">
@@ -134,10 +135,8 @@
 
 <script>
 import {
-  batchDeleteDepartments,
   createDepartment,
   deleteDepartment,
-  getDepartmentPage,
   getDepartmentTree,
   updateDepartment
 } from "@/api/admin/department"
@@ -146,24 +145,14 @@ export default {
   name: "AdminDepartmentPage",
   data() {
     return {
-      activeTab: "list",
-      loading: false,
       saveLoading: false,
       treeLoading: false,
 
-      list: [],
-      total: 0,
-      selectedIds: [],
-
-      query: {
-        current: 1,
-        size: 10,
-        keyword: ""
-      },
-
+      treeKeyword: "",
       tree: [],
       treeProps: { label: "name", children: "children" },
       treeSelectProps: { value: "id", label: "name", children: "children" },
+      currentNode: null,
 
       dialogVisible: false,
       dialogTitle: "",
@@ -176,61 +165,75 @@ export default {
     }
   },
   created() {
-    this.bootstrap()
+    this.fetchTree()
   },
   methods: {
     getEmptyForm() {
       return { id: "", name: "", code: "", parentId: "", status: 1, remark: "" }
-    },
-    async bootstrap() {
-      await this.fetchTree()
-      this.fetchList()
     },
     async fetchTree() {
       this.treeLoading = true
       try {
         const res = await getDepartmentTree()
         this.tree = res?.data || []
+        // keep current selection stable if possible
+        if (this.currentNode?.id) {
+          const id = String(this.currentNode.id)
+          const next = this.findNodeById(id, this.tree)
+          this.currentNode = next || null
+        }
+        this.$nextTick(() => this.applyTreeFilter())
       } catch (e) {
         this.tree = []
+        this.currentNode = null
       } finally {
         this.treeLoading = false
       }
     },
-    async fetchList() {
-      this.loading = true
-      try {
-        const res = await getDepartmentPage({
-          current: this.query.current,
-          size: this.query.size,
-          keyword: this.query.keyword || undefined
-        })
-        const page = res?.data || {}
-        this.list = page.records || []
-        this.total = page.total || 0
-      } catch (e) {
-        this.list = []
-        this.total = 0
-      } finally {
-        this.loading = false
+    onNodeClick(data) {
+      this.currentNode = data || null
+    },
+    filterTreeNode(value, data) {
+      const v = String(value || "").trim().toLowerCase()
+      if (!v) return true
+      const name = String(data?.name || "").toLowerCase()
+      const code = String(data?.code || "").toLowerCase()
+      return name.includes(v) || code.includes(v)
+    },
+    applyTreeFilter() {
+      const tree = this.$refs.treeRef
+      if (tree && tree.filter) tree.filter(this.treeKeyword)
+    },
+    findNodeById(id, nodes) {
+      const target = String(id || "")
+      if (!target) return null
+      const list = Array.isArray(nodes) ? nodes : []
+      for (const n of list) {
+        if (!n) continue
+        if (String(n.id) === target) return n
+        const children = n.children
+        if (Array.isArray(children) && children.length) {
+          const hit = this.findNodeById(target, children)
+          if (hit) return hit
+        }
       }
+      return null
     },
-    handleSearch() {
-      this.query.current = 1
-      this.fetchList()
-    },
-    handleReset() {
-      this.query = { current: 1, size: 10, keyword: "" }
-      this.selectedIds = []
-      this.fetchList()
-    },
-    handleSelectionChange(rows) {
-      this.selectedIds = (rows || []).map(r => r.id).filter(Boolean)
-    },
-    handleAdd() {
+    handleAddRoot() {
       this.isEdit = false
       this.dialogTitle = "新增部门"
       this.form = this.getEmptyForm()
+      this.dialogVisible = true
+    },
+    handleAddChild(parent) {
+      const p = parent || this.currentNode
+      if (!p?.id) {
+        this.handleAddRoot()
+        return
+      }
+      this.isEdit = false
+      this.dialogTitle = "新增子部门"
+      this.form = { ...this.getEmptyForm(), parentId: p.id }
       this.dialogVisible = true
     },
     handleEdit(row) {
@@ -262,31 +265,24 @@ export default {
           }
           this.dialogVisible = false
           await this.fetchTree()
-          this.fetchList()
         } finally {
           this.saveLoading = false
         }
       })
     },
     handleDelete(row) {
+      if (row?.children && row.children.length) {
+        this.$message.warning("该部门存在子部门，无法删除")
+        return
+      }
       this.$confirm("确认删除该部门吗？", "提示", { type: "warning" })
         .then(async () => {
           await deleteDepartment(row.id)
           this.$message.success("删除成功")
           await this.fetchTree()
-          this.fetchList()
-        })
-        .catch(() => {})
-    },
-    handleBatchDelete() {
-      if (!this.selectedIds.length) return
-      this.$confirm(`确认删除选中的 ${this.selectedIds.length} 个部门吗？`, "提示", { type: "warning" })
-        .then(async () => {
-          await batchDeleteDepartments(this.selectedIds)
-          this.$message.success("删除成功")
-          this.selectedIds = []
-          await this.fetchTree()
-          this.fetchList()
+          if (this.currentNode?.id && String(this.currentNode.id) === String(row.id)) {
+            this.currentNode = null
+          }
         })
         .catch(() => {})
     }
@@ -298,11 +294,55 @@ export default {
 .admin-department-page {
   padding: 20px;
 }
-.query-form {
-  margin-bottom: 6px;
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
-.pager {
-  margin-top: 16px;
-  text-align: right;
+.title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dept-tree {
+  width: 100%;
+}
+.tree-node {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 6px;
+}
+.node-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.node-name {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-code {
+  color: #666;
+  font-size: 12px;
+}
+.node-status {
+  margin-left: 4px;
+}
+.node-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>

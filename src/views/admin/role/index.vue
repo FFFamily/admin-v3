@@ -100,7 +100,11 @@
           <el-input v-model="form.name" placeholder="请输入角色名" />
         </el-form-item>
         <el-form-item label="编码" prop="code">
-          <el-input v-model="form.code" placeholder="如：ADMIN" :disabled="isEdit && isSuperAdminRole(form)" />
+          <el-input
+            v-model="form.code"
+            placeholder="如：ADMIN_ROLE"
+            :disabled="isEdit && isSuperAdminRole(form)"
+          />
         </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入备注" />
@@ -180,6 +184,7 @@ export default {
         ],
         code: [
           { required: true, message: "请输入编码", trigger: "blur" },
+          { pattern: /^[A-Z_]+$/, message: "编码只能包含大写英文字母和下划线", trigger: "blur" },
           { min: 2, max: 30, message: "编码长度在 2 到 30 个字符", trigger: "blur" }
         ]
       },

@@ -164,7 +164,7 @@ import { computed, onMounted, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { getAdminRoleInfo, getRolesByUserId } from "@/api/admin/role"
-import { getAdminUserPage, getUsersByRole, setAdminUserRoles } from "@/api/admin/user"
+import { getAssignableAdminUserPage, getUsersByRole, setAdminUserRoles } from "@/api/admin/user"
 
 const route = useRoute()
 const router = useRouter()
@@ -270,7 +270,7 @@ const fetchUserPage = async () => {
       keyword: addQuery.value.keyword || undefined,
       status: addQuery.value.status || undefined
     }
-    const res = await getAdminUserPage(params)
+    const res = await getAssignableAdminUserPage(params)
     const page = res?.data || {}
     const records = page.records || []
     // Avoid re-adding existing role users in the dialog list (still show them, but user will be no-op on save).

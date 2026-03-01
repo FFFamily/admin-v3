@@ -9,6 +9,15 @@ export function getAdminUserPage(params) {
   })
 }
 
+// 用户分页列表（用于角色分配：排除 SUPER_ADMIN 内置用户）
+export function getAssignableAdminUserPage(params) {
+  return request({
+    url: "/admin/user/page/assignable",
+    method: "get",
+    params
+  })
+}
+
 // 用户详情（建议后端聚合角色/部门信息）
 export function getAdminUserInfo(id) {
   return request({
@@ -103,4 +112,3 @@ export function getUsersByRole(roleId) {
     method: "get"
   })
 }
-
