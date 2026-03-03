@@ -18,6 +18,11 @@ export const constantRoutes = [
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/dashboard/index.vue'),
+        // Sidebar rendering helper:
+        // `filterRoutesForSidebar()` clones routes and always assigns `children: []`,
+        // which would make the sidebar treat this leaf node as having children.
+        // Mark it as "no showing children" so it renders as a single menu item.
+        noShowingChildren: true,
         meta: { title: '首页', icon: 'dashboard' }
       }
     ]
