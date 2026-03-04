@@ -68,6 +68,18 @@ export const constantRoutes = [
         meta: { title: '权限管理' }
       },
       {
+        path: 'tenant',
+        name: 'AdminTenant',
+        component: () => import('@/views/admin/tenant/index.vue'),
+        meta: { title: '租户管理' }
+      },
+      {
+        path: 'package',
+        name: 'AdminPackage',
+        component: () => import('@/views/admin/package/index.vue'),
+        meta: { title: '套餐管理' }
+      },
+      {
         path: 'department',
         name: 'AdminDepartment',
         component: () => import('@/views/admin/department/index.vue'),

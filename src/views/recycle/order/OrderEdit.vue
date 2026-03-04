@@ -945,10 +945,12 @@ export default {
         }
 
         // 使用fetch下载文件，携带token
+        const tenantCode = import.meta.env.VITE_TENANT_CODE || localStorage.getItem('tenant_code') || 'default'
         const response = await fetch(fullUrl, {
           method: 'GET',
           headers: {
             'Token-Key': token,
+            'X-Tenant-Code': tenantCode,
             'Authorization': `Bearer ${token}`
           }
         })
