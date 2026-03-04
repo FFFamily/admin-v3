@@ -312,10 +312,10 @@ export default {
           { required: true, message: "请输入用户昵称", trigger: "blur" },
           { min: 2, max: 20, message: "昵称长度在 2 到 20 个字符", trigger: "blur" }
         ],
-        phone: [
-          { required: true, message: "请输入手机号", trigger: "blur" },
-          { pattern: /^1[3-9]\d{9}$/, message: "请输入正确的11位手机号", trigger: "blur" }
-        ],
+        // phone: [
+        //   { required: true, message: "请输入手机号", trigger: "blur" },
+        //   { pattern: /^1[3-9]\d{9}$/, message: "请输入正确的11位手机号", trigger: "blur" }
+        // ],
         status: [{ required: true, message: "请选择用户状态", trigger: "change" }]
       },
       updateRules: {

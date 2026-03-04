@@ -95,6 +95,12 @@ export const constantRoutes = [
         name: 'AdminProcessor',
         component: () => import('@/views/admin/processor/index.vue'),
         meta: { title: '经办人管理' }
+      },
+      {
+        path: 'announcement',
+        name: 'AdminAnnouncement',
+        component: () => import('@/views/admin/announcement/index.vue'),
+        meta: { title: '公告管理' }
       }
     ]
   },
