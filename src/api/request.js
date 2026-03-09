@@ -24,12 +24,6 @@ service.interceptors.request.use(
     if (token) {
       config.headers["Token-Key"] = token
     }
-    // Multi-tenant header (SaaS): default to env/localStorage fallback.
-    const tenantCode =
-      import.meta.env.VITE_TENANT_CODE ||
-      localStorage.getItem("tenant_code") ||
-      "default"
-    config.headers["X-Tenant-Code"] = tenantCode
     return config
   },
   error => Promise.reject(error)

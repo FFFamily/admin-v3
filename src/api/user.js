@@ -1,10 +1,32 @@
 import request from '@/api/request'
 
-export function login(data) {
+// Pre-login: verify username/password and return a short-lived Pre-Token + tenant options.
+export function preLogin(data) {
   return request({
     url: '/ad/auth/login',
     method: 'post',
     data
+  })
+}
+
+export function listTenants(preToken) {
+  return request({
+    url: '/ad/auth/tenants',
+    method: 'get',
+    headers: {
+      'Pre-Token': preToken
+    }
+  })
+}
+
+export function selectTenant(preToken, tenantId) {
+  return request({
+    url: '/ad/auth/select-tenant',
+    method: 'post',
+    headers: {
+      'Pre-Token': preToken
+    },
+    data: { tenantId }
   })
 }
 

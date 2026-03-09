@@ -24,7 +24,7 @@
           hide-required-asterisk
           @submit.prevent
         >
-          <el-form-item label="邮箱" prop="username">
+          <el-form-item v-if="step === 'credential'" label="邮箱" prop="username">
             <el-input
               ref="usernameRef"
               v-model="loginForm.username"
@@ -41,7 +41,7 @@
             </el-input>
           </el-form-item>
 
-          <el-form-item label="密码" prop="password">
+          <el-form-item v-if="step === 'credential'" label="密码" prop="password">
             <el-input
               ref="passwordRef"
               :key="passwordType"
@@ -70,10 +70,28 @@
             </el-input>
           </el-form-item>
 
-          <div class="form-row" aria-label="Form options">
+          <div v-if="step === 'credential'" class="form-row" aria-label="Form options">
             <el-checkbox v-model="loginForm.remember" size="default">记住我</el-checkbox>
             <a class="forgot-link" href="#" @click.prevent="handleForgot">忘记密码？</a>
           </div>
+
+          <el-form-item v-if="step === 'tenant'" label="选择租户">
+            <el-select
+              v-model="selectedTenantId"
+              placeholder="请选择你要进入的租户"
+              size="large"
+              class="tenant-select"
+              filterable
+            >
+              <el-option
+                v-for="t in tenantOptions"
+                :key="t.tenantId"
+                :label="`${t.tenantName}（${t.tenantCode}）`"
+                :value="t.tenantId"
+              />
+            </el-select>
+            <div class="tenant-hint">提示：租户未开通服务或已到期将无法登录。</div>
+          </el-form-item>
 
           <el-button
             class="login-btn"
@@ -82,7 +100,17 @@
             size="large"
             @click.prevent="handleLogin"
           >
-            登 录
+            {{ step === 'credential' ? '下一步' : '进入系统' }}
+          </el-button>
+
+          <el-button
+            v-if="step === 'tenant'"
+            class="back-btn"
+            text
+            :disabled="loading"
+            @click.prevent="handleBack"
+          >
+            返回重新输入账号
           </el-button>
         </el-form>
 
@@ -137,10 +165,14 @@ const loginRules = {
 const loading = ref(false)
 const passwordType = ref("password")
 const redirect = ref(undefined)
+const step = ref("credential")
+const selectedTenantId = ref("")
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+
+const tenantOptions = ref([])
 
 watch(
   () => route.query.redirect,
@@ -170,18 +202,73 @@ onMounted(() => {
 const handleLogin = async () => {
   if (!loginFormRef.value) return
   try {
-    const valid = await loginFormRef.value.validate()
-    if (!valid) {
+    if (step.value === "credential") {
+      const valid = await loginFormRef.value.validate()
+      if (!valid) return
+
+      loading.value = true
+      const data = await userStore.preLogin(loginForm)
+      tenantOptions.value = data?.tenants || []
+      if (!tenantOptions.value.length) {
+        // fallback to explicit fetch (in case backend didn't embed tenants)
+        const list = await userStore.fetchTenants()
+        tenantOptions.value = list || []
+      }
+      if (!tenantOptions.value.length) {
+        ElMessage.error("该账号未加入任何可用租户")
+        return
+      }
+
+      // default select: last tenant
+      const last = localStorage.getItem("last_tenant_id")
+      if (last && tenantOptions.value.some(t => t.tenantId === last)) {
+        selectedTenantId.value = last
+      } else if (tenantOptions.value.length === 1) {
+        selectedTenantId.value = tenantOptions.value[0].tenantId
+      }
+
+      step.value = "tenant"
+      nextTick(() => {
+        // focus select by triggering click
+      })
       return
     }
+
+    if (!selectedTenantId.value) {
+      ElMessage.warning("请选择租户")
+      return
+    }
+
     loading.value = true
-    await userStore.login(loginForm)
+    await userStore.selectTenant(selectedTenantId.value)
+    // Eagerly verify the formal token works (and that backend has bound tenantId into token session),
+    // otherwise the router guard will bounce back to /login and users won't know why.
+    try {
+      await userStore.getInfo()
+    } catch (e) {
+      userStore.resetToken()
+      step.value = "credential"
+      tenantOptions.value = []
+      selectedTenantId.value = ""
+      ElMessage.error("进入系统失败，请重新登录并选择租户")
+      return
+    }
     router.push({ path: redirect.value || "/" })
   } catch (error) {
     // ignore
   } finally {
     loading.value = false
   }
+}
+
+const handleBack = () => {
+  step.value = "credential"
+  tenantOptions.value = []
+  selectedTenantId.value = ""
+  userStore.resetToken()
+  nextTick(() => {
+    if (usernameRef.value?.focus) usernameRef.value.focus()
+  })
 }
 
 const handleForgot = () => {
@@ -420,5 +507,19 @@ const handleRegister = () => {
     max-width: 520px;
     padding: 26px 22px 20px;
   }
+}
+
+.tenant-select {
+  width: 100%;
+}
+
+.tenant-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--login-muted);
+}
+
+.back-btn {
+  margin-top: 10px;
 }
 </style>

@@ -78,6 +78,7 @@
           <el-button v-permission="'user:read'" link type="primary" @click="openDetail(row)">详情</el-button>
           <el-button v-permission="'user:update'" link type="primary" @click="handleEdit(row)">编辑</el-button>
           <el-button v-permission="'user:update'" link type="primary" @click="openRoleDialog(row)">分配角色</el-button>
+          <el-button v-if="isPlatformAdmin" link type="primary" @click="openTenantDialog(row)">配置租户</el-button>
           <el-button v-permission="'user:reset_password'" link type="primary" @click="openResetPwdDialog(row)">重置密码</el-button>
 
           <el-button
@@ -130,6 +131,29 @@
       <el-form ref="formRef" :model="form" :rules="isEdit ? updateRules : createRules" label-width="100px">
         <el-form-item label="登录账号" prop="username">
           <el-input v-model="form.username" placeholder="请输入登录账号" :disabled="isEdit" />
+        </el-form-item>
+
+        <el-form-item v-if="!isEdit && isPlatformAdmin" label="所属租户" prop="tenantIds">
+          <el-select
+            v-model="form.tenantIds"
+            multiple
+            clearable
+            filterable
+            placeholder="请选择所属租户（至少 1 个）"
+            style="width: 100%"
+            :loading="tenantOptionsLoading"
+            @visible-change="onTenantSelectVisibleChange"
+          >
+            <el-option
+              v-for="t in tenantOptionsAll"
+              :key="t.id"
+              :label="`${t.name}（${t.code}）`"
+              :value="t.id"
+            />
+          </el-select>
+          <div style="margin-top: 6px; font-size: 12px; color: #999">
+            未加入任何租户的账号无法登录；创建后也可在“配置租户”中调整。
+          </div>
         </el-form-item>
 
         <el-form-item v-if="!isEdit" label="初始密码" prop="password">
@@ -241,6 +265,33 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 平台：配置用户所属租户 -->
+    <el-dialog title="配置所属租户" v-model="tenantDialogVisible" width="560px" @closed="onTenantDialogClosed">
+      <div style="margin-bottom: 10px; color: #666; font-size: 12px">
+        用户：{{ tenantDialogUser?.nickname || tenantDialogUser?.username || "--" }}
+      </div>
+      <el-select
+        v-model="tenantDialogTenantIds"
+        multiple
+        clearable
+        filterable
+        placeholder="请选择所属租户（至少 1 个）"
+        style="width: 100%"
+        :loading="tenantOptionsLoading"
+        @visible-change="onTenantSelectVisibleChange"
+      >
+        <el-option v-for="t in tenantOptionsAll" :key="t.id" :label="`${t.name}（${t.code}）`" :value="t.id" />
+      </el-select>
+      <div style="margin-top: 8px; font-size: 12px; color: #999">提示：清空将导致该账号无法登录。</div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="tenantDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="tenantDialogSaveLoading" @click="saveUserTenants">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -259,6 +310,9 @@ import {
 } from "@/api/admin/user"
 import { getAllEnabledRoles } from "@/api/admin/role"
 import { getDepartmentTree } from "@/api/admin/department"
+import { getTenantPage } from "@/api/admin/tenant"
+import { getAdminUserTenantIds, setAdminUserTenants } from "@/api/admin/userTenant"
+import { useUserStore } from "@/stores/user"
 
 function flattenTree(list, childrenKey = "children") {
   const out = []
@@ -304,6 +358,18 @@ export default {
           { required: true, message: "请输入登录账号", trigger: "blur" },
           { min: 3, max: 20, message: "账号长度在 3 到 20 个字符", trigger: "blur" }
         ],
+        tenantIds: [
+          {
+            validator: (rule, value, callback) => {
+              const userStore = useUserStore()
+              const isPlatformAdmin = String(userStore?.id || "") === "1"
+              if (!isPlatformAdmin) return callback()
+              if (Array.isArray(value) && value.length) return callback()
+              callback(new Error("请选择至少一个租户"))
+            },
+            trigger: "change"
+          }
+        ],
         password: [
           { required: true, message: "请输入初始密码", trigger: "blur" },
           { min: 6, max: 20, message: "密码长度在 6 到 20 个字符", trigger: "blur" }
@@ -348,10 +414,21 @@ export default {
           { required: true, message: "请输入新密码", trigger: "blur" },
           { min: 6, max: 20, message: "密码长度在 6 到 20 个字符", trigger: "blur" }
         ]
-      }
+      },
+
+      tenantOptionsLoading: false,
+      tenantOptionsAll: [],
+      tenantDialogVisible: false,
+      tenantDialogUser: null,
+      tenantDialogTenantIds: [],
+      tenantDialogSaveLoading: false
     }
   },
   computed: {
+    isPlatformAdmin() {
+      const userStore = useUserStore()
+      return String(userStore?.id || "") === "1"
+    },
     resetPwdUserLabel() {
       const u = this.resetPwdUser
       if (!u) return "--"
@@ -375,7 +452,8 @@ export default {
         phone: "",
         avatar: "",
         status: "use",
-        deptId: ""
+        deptId: "",
+        tenantIds: []
       }
     },
     async bootstrap() {
@@ -450,6 +528,12 @@ export default {
       this.isEdit = false
       this.dialogTitle = "新增用户"
       this.form = this.getEmptyForm()
+      if (this.isPlatformAdmin) {
+        const currentTenantId = localStorage.getItem("last_tenant_id")
+        if (currentTenantId) {
+          this.form.tenantIds = [currentTenantId]
+        }
+      }
       this.dialogVisible = true
     },
     async handleEdit(row) {
@@ -480,16 +564,25 @@ export default {
         this.saveLoading = true
         try {
           if (this.isEdit) {
-            await updateAdminUser({ ...this.form })
+            const payload = { ...this.form }
+            delete payload.tenantIds
+            await updateAdminUser(payload)
             this.$message.success("更新成功")
           } else {
-            const res = await createAdminUser({ ...this.form })
-            // Best-effort: if backend returns id, keep it for follow-up actions.
-            const id = res?.data?.id || res?.data
-            const isLikelyId =
-              typeof id === "string" &&
-              (/^[0-9a-fA-F]{32}$/.test(id) || /^[0-9a-fA-F-]{36}$/.test(id))
-            if (isLikelyId) this.form.id = id
+            const payload = { ...this.form }
+            delete payload.tenantIds
+            const res = await createAdminUser(payload)
+            const id = res?.data
+            if (id) this.form.id = String(id)
+
+            // Platform: assign tenant memberships right after creation.
+            if (this.isPlatformAdmin) {
+              const tenantIds = Array.isArray(this.form.tenantIds) ? this.form.tenantIds.filter(Boolean) : []
+              if (!tenantIds.length) {
+                throw new Error("请选择至少一个租户")
+              }
+              await setAdminUserTenants(this.form.id, tenantIds)
+            }
             this.$message.success("创建成功")
           }
           this.dialogVisible = false
@@ -583,6 +676,63 @@ export default {
         this.fetchList()
       } finally {
         this.roleSaveLoading = false
+      }
+    },
+    async onTenantSelectVisibleChange(visible) {
+      if (!visible) return
+      await this.fetchAllTenants()
+    },
+    async fetchAllTenants() {
+      if (this.tenantOptionsLoading) return
+      if (Array.isArray(this.tenantOptionsAll) && this.tenantOptionsAll.length) return
+      this.tenantOptionsLoading = true
+      try {
+        const res = await getTenantPage({ current: 1, size: 1000 })
+        const page = res?.data || {}
+        const records = page.records || []
+        this.tenantOptionsAll = (records || []).map(t => ({
+          id: t.id,
+          code: t.code,
+          name: t.name,
+          status: t.status
+        }))
+      } catch (e) {
+        this.tenantOptionsAll = []
+      } finally {
+        this.tenantOptionsLoading = false
+      }
+    },
+    async openTenantDialog(row) {
+      if (!row?.id) return
+      this.tenantDialogUser = row
+      this.tenantDialogTenantIds = []
+      this.tenantDialogVisible = true
+      await this.fetchAllTenants()
+      try {
+        const res = await getAdminUserTenantIds(row.id)
+        this.tenantDialogTenantIds = res?.data || []
+      } catch (e) {
+        this.tenantDialogTenantIds = []
+      }
+    },
+    onTenantDialogClosed() {
+      this.tenantDialogUser = null
+      this.tenantDialogTenantIds = []
+    },
+    async saveUserTenants() {
+      if (!this.tenantDialogUser?.id) return
+      const ids = Array.isArray(this.tenantDialogTenantIds) ? this.tenantDialogTenantIds.filter(Boolean) : []
+      if (!ids.length) {
+        this.$message.warning("至少选择 1 个租户")
+        return
+      }
+      this.tenantDialogSaveLoading = true
+      try {
+        await setAdminUserTenants(this.tenantDialogUser.id, ids)
+        this.$message.success("保存成功")
+        this.tenantDialogVisible = false
+      } finally {
+        this.tenantDialogSaveLoading = false
       }
     },
     openResetPwdDialog(row) {

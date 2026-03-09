@@ -1,11 +1,13 @@
 import { defineStore } from "pinia"
-import { login as loginApi, logout as logoutApi, getInfo as getInfoApi } from "@/api/user"
+import { preLogin as preLoginApi, listTenants as listTenantsApi, selectTenant as selectTenantApi, logout as logoutApi, getInfo as getInfoApi } from "@/api/user"
 import { getToken, setToken, removeToken } from "@/utils/auth"
 import { getPermissionsByUser } from "@/api/admin/permission"
 
 export const useUserStore = defineStore("user", {
   state: () => ({
     token: getToken() || "",
+    preToken: "",
+    tenantOptions: [],
     id: "",
     name: "",
     avatar: "",
@@ -13,7 +15,7 @@ export const useUserStore = defineStore("user", {
     permsLoaded: false
   }),
   actions: {
-    async login({ username, password }) {
+    async preLogin({ username, password }) {
       // If switching accounts without a full reload, clear previous user profile/perms
       // so the router guard will re-fetch the new user's permissions.
       this.id = ""
@@ -21,12 +23,39 @@ export const useUserStore = defineStore("user", {
       this.avatar = ""
       this.perms = []
       this.permsLoaded = false
+      this.tenantOptions = []
+      this.preToken = ""
 
-      const res = await loginApi({ username: (username || "").trim(), password })
+      // Clear formal token before starting a new login flow.
+      this.resetToken()
+
+      const res = await preLoginApi({ username: (username || "").trim(), password })
+      const data = res?.data || {}
+      this.preToken = data?.preToken || ""
+      this.tenantOptions = data?.tenants || []
+      return data
+    },
+
+    async fetchTenants() {
+      if (!this.preToken) return []
+      const res = await listTenantsApi(this.preToken)
+      const list = res?.data || []
+      this.tenantOptions = list
+      return list
+    },
+
+    async selectTenant(tenantId) {
+      if (!this.preToken) {
+        throw new Error("Missing preToken")
+      }
+      const res = await selectTenantApi(this.preToken, tenantId)
       const token = res?.data
       this.token = token || ""
       setToken(this.token)
-      // Note: follow Vue2 logic - user info is fetched after login by guard/navbar.
+      localStorage.setItem("last_tenant_id", tenantId)
+      // Clear pre state after exchanging token.
+      this.preToken = ""
+      this.tenantOptions = []
       return token
     },
     async getInfo() {
@@ -74,6 +103,8 @@ export const useUserStore = defineStore("user", {
     resetToken() {
       removeToken()
       this.token = ""
+      this.preToken = ""
+      this.tenantOptions = []
       this.id = ""
       this.name = ""
       this.avatar = ""
